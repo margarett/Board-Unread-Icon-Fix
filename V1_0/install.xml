@@ -1,0 +1,236 @@
+<?xml version="1.0"?>
+<!DOCTYPE modification SYSTEM "http://www.simplemachines.org/xml/modification">
+<modification xmlns="http://www.simplemachines.org/xml/modification" xmlns:smf="http://www.simplemachines.org/">
+	<id>margarett:BoardIndexUnreadIconFix</id>
+	<version>1.0</version>
+
+	<file name="$sourcedir/ManageSettings.php">
+		<operation>
+			<search position="before"><![CDATA[// Mod authors, add any settings UNDER this line. Include a comma at the end of the line and don't remove this statement!!]]></search>
+			<add><![CDATA[
+			// BoardIndexUnreadIconFix Settings
+			array('check', 'BoardIndexUnreadIconFix_on'),
+			]]></add>
+		</operation>
+	</file>
+
+	<file name="$sourcedir/Display.php">
+
+		<operation>
+			<search position="after"><![CDATA[		// Mark board as seen if we came using last post link from BoardIndex. (or other places...)]]></search>
+			<add><![CDATA[
+// START MOD :: BoardIndexUnreadIconFix	
+		elseif (!isset($_REQUEST['topicseen']) && !isset($_SESSION['topicseen_cache'][$board]) && !empty($modSettings['BoardIndexUnreadIconFix_on']))
+		{
+			// Use the mark read tables... and the last visit to figure out if this should be read or not.
+			$request = $smcFunc['db_query']('', '
+				SELECT COUNT(*)
+				FROM {db_prefix}topics AS t
+					LEFT JOIN {db_prefix}log_boards AS lb ON (lb.id_board = {int:current_board} AND lb.id_member = {int:current_member})
+					LEFT JOIN {db_prefix}log_topics AS lt ON (lt.id_topic = t.id_topic AND lt.id_member = {int:current_member})
+				WHERE t.id_board = {int:current_board}
+					AND t.id_last_msg > IFNULL(lb.id_msg, 0)
+					AND t.id_last_msg > IFNULL(lt.id_msg, 0)' . (empty($_SESSION['id_msg_last_visit']) ? '' : '
+					AND t.id_last_msg > {int:id_msg_last_visit}'),
+				array(
+					'current_board' => $board,
+					'current_member' => $user_info['id'],
+					'id_msg_last_visit' => (int) $_SESSION['id_msg_last_visit'],
+				)
+			);
+			list ($numNewTopics) = $smcFunc['db_fetch_row']($request);
+			$smcFunc['db_free_result']($request);
+
+			// If there're no real new topics in this board, mark the board as seen.
+			if (empty($numNewTopics))
+				$_REQUEST['boardseen'] = true;
+			else
+				$_SESSION['topicseen_cache'][$board] = $numNewTopics;
+		}
+// END MOD :: BoardIndexUnreadIconFix
+
+]]></add>
+		</operation>
+	</file>
+	<file name="$sourcedir/Subs-Boards.php">
+		<operation>
+			<search position="before"><![CDATA[
+		// Blam, unread!
+		$smcFunc['db_insert']('replace',
+			'{db_prefix}log_topics',
+			array('id_msg' => 'int', 'id_member' => 'int', 'id_topic' => 'int'),
+			array($earlyMsg, $user_info['id'], $topic),
+			array('id_member', 'id_topic')
+		);]]></search>
+			<add><![CDATA[
+
+// START MOD :: BoardIndexUnreadIconFix
+		if (!empty($modSettings['BoardIndexUnreadIconFix_on']))
+		{
+			$boards = array();
+			$boards[] = (int) $board;
+			$smcFunc['db_query']('', '
+				UPDATE IGNORE {db_prefix}log_boards
+				SET id_msg = {int:id_msg}
+				WHERE id_member = {int:current_member}
+					AND id_board IN ({array_int:board_list})',
+				array(
+					'current_member' => $user_info['id'],
+					'board_list' => $boards,
+					'id_msg' => 1,
+				)
+			);
+		}
+// END MOD :: BoardIndexUnreadIconFix
+
+]]></add>
+		</operation>
+	</file>
+	<file name="$sourcedir/MessageIndex.php">
+		<operation>
+			<search position="after"><![CDATA[// Show the list of topics in this board, along with any child boards.]]></search>
+			<add><![CDATA[
+
+// START MOD :: BoardIndexUnreadIconFix
+function checkUnreadTopicCount()
+{
+	global $txt, $scripturl, $board, $modSettings, $context;
+	global $options, $settings, $board_info, $user_info, $smcFunc, $sourcedir;
+
+	$TopicUnreadFixCount = 0;
+	foreach ($context['topics'] as $t => $topic)
+	{
+		if ($topic['new'] == 1)
+		{
+			$TopicUnreadFixCount++;
+		}
+	}
+	if ($TopicUnreadFixCount == 0)
+	{
+		updateReadBoards();
+	}
+}
+function updateReadBoards()
+{
+	global $txt, $scripturl, $board, $modSettings, $context;
+	global $options, $settings, $board_info, $user_info, $smcFunc, $sourcedir;
+
+	$smcFunc['db_insert']('replace',
+		'{db_prefix}log_boards',
+		array('id_msg' => 'int', 'id_member' => 'int', 'id_board' => 'int'),
+		array($modSettings['maxMsgID'], $user_info['id'], $board),
+		array('id_member', 'id_board')
+	);
+
+	if (!empty($board_info['parent_boards']))
+	{
+		$smcFunc['db_query']('', '
+			UPDATE {db_prefix}log_boards
+			SET id_msg = {int:id_msg}
+			WHERE id_member = {int:current_member}
+				AND id_board IN ({array_int:board_list})',
+			array(
+				'current_member' => $user_info['id'],
+				'board_list' => array_keys($board_info['parent_boards']),
+				'id_msg' => $modSettings['maxMsgID'],
+			)
+		);
+
+		// We've seen all these boards now!
+		foreach ($board_info['parent_boards'] as $k => $dummy)
+			if (isset($_SESSION['topicseen_cache'][$k]))
+				unset($_SESSION['topicseen_cache'][$k]);
+	}
+}
+// END MOD :: BoardIndexUnreadIconFix
+
+]]></add>
+		</operation>
+		<operation>
+			<search position="replace"><![CDATA[
+		$smcFunc['db_insert']('replace',
+			'{db_prefix}log_boards',
+			array('id_msg' => 'int', 'id_member' => 'int', 'id_board' => 'int'),
+			array($modSettings['maxMsgID'], $user_info['id'], $board),
+			array('id_member', 'id_board')
+		);
+
+		if (!empty($board_info['parent_boards']))
+		{
+			$smcFunc['db_query']('', '
+				UPDATE {db_prefix}log_boards
+				SET id_msg = {int:id_msg}
+				WHERE id_member = {int:current_member}
+					AND id_board IN ({array_int:board_list})',
+				array(
+					'current_member' => $user_info['id'],
+					'board_list' => array_keys($board_info['parent_boards']),
+					'id_msg' => $modSettings['maxMsgID'],
+				)
+			);
+
+			// We've seen all these boards now!
+			foreach ($board_info['parent_boards'] as $k => $dummy)
+				if (isset($_SESSION['topicseen_cache'][$k]))
+					unset($_SESSION['topicseen_cache'][$k]);
+		}
+]]></search>
+			<add><![CDATA[
+
+		// START MOD :: BoardIndexUnreadIconFix
+		//   The original SMF code here has been relocated to the new function UpdateReadBoards()
+		//   so that the order of operations can be changed.
+		
+		// Run the original code if the mod is not enabled
+		if (empty($modSettings['BoardIndexUnreadIconFix_on']))
+		{
+		// END MOD :: BoardIndexUnreadIconFix
+		
+		$smcFunc['db_insert']('replace',
+			'{db_prefix}log_boards',
+			array('id_msg' => 'int', 'id_member' => 'int', 'id_board' => 'int'),
+			array($modSettings['maxMsgID'], $user_info['id'], $board),
+			array('id_member', 'id_board')
+		);
+
+		if (!empty($board_info['parent_boards']))
+		{
+			$smcFunc['db_query']('', '
+				UPDATE {db_prefix}log_boards
+				SET id_msg = {int:id_msg}
+				WHERE id_member = {int:current_member}
+					AND id_board IN ({array_int:board_list})',
+				array(
+					'current_member' => $user_info['id'],
+					'board_list' => array_keys($board_info['parent_boards']),
+					'id_msg' => $modSettings['maxMsgID'],
+				)
+			);
+
+			// We've seen all these boards now!
+			foreach ($board_info['parent_boards'] as $k => $dummy)
+				if (isset($_SESSION['topicseen_cache'][$k]))
+					unset($_SESSION['topicseen_cache'][$k]);
+		}
+
+		// START MOD :: BoardIndexUnreadIconFix
+		}
+		// END MOD :: BoardIndexUnreadIconFix
+
+]]></add>
+		</operation>
+		<operation>
+			<search position="after"><![CDATA[
+		$smcFunc['db_free_result']($result);
+
+		// Fix the sequence of topics if they were retrieved in the wrong order. (for speed reasons...)
+]]></search>
+			<add><![CDATA[
+
+// START MOD :: BoardIndexUnreadIconFix
+		checkUnreadTopicCount();
+// END MOD :: BoardIndexUnreadIconFix
+]]></add>
+		</operation>
+	</file>
+</modification>
