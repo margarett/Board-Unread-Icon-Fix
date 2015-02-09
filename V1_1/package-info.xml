@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<?xml-stylesheet href="package-info.xsl" type="text/xsl"?>
+<!DOCTYPE package-info SYSTEM "http://www.simplemachines.org/xml/package-info">
+<package-info xmlns="http://www.simplemachines.org/xml/package-info" xmlns:smf="http://www.simplemachines.org/">
+	<id>margarett:BoardIndexUnreadIconFix</id>
+	<name>Board Index Unread Icon Fix</name>
+	<version>1.1</version>
+	<type>modification</type>
+
+	<install for="1.0.1 - 1.0.99">
+		<readme type="inline" parsebbc="true">[color=red]ERROR!![/color] This mod will not work on your version of SMF.</readme>
+	</install>
+
+	<install for="1.1.1 - 1.1.99">
+		<readme type="inline" parsebbc="true">[color=red]ERROR!![/color] This mod will not work on your version of SMF.</readme>
+	</install>
+
+	<install for="2.0 RC1, 2.0 RC2, 2.0 RC3, 2.0 RC4, 2.0 RC5">
+		<readme type="inline" parsebbc="true">[color=red]ERROR!![/color] This version of the mod can only be installed on SMF 2.0+ </readme>
+	</install>
+
+	<install for="2.0 - 2.0.99">
+		<readme type="file" parsebbc="true">readme.txt</readme>
+		<modification>install.xml</modification>
+		<modification>english.xml</modification>
+		<modification>english-utf8.xml</modification>
+		<redirect url="?action=admin;area=modsettings" />
+	</install>
+
+	<uninstall for="2.0 - 2.0.99">
+		<modification reverse="true">install.xml</modification>
+		<modification reverse="true">english.xml</modification>
+		<modification reverse="true">english-utf8.xml</modification>
+		<redirect url="?action=admin;area=packages;sa=browse" />
+	</uninstall>
+</package-info>
